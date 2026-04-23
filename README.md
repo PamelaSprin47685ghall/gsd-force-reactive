@@ -12,7 +12,7 @@ This plugin intercepts the `gsd_plan_slice` tool result. When a slice is planned
 Run `pi` with the extension flag:
 
 ```bash
-pi -e ./src/index.js
+pi -e ./index.js
 ```
 
 Or copy the directory to your project's `.gsd/extensions/` directory for automatic loading.

@@ -1,8 +1,8 @@
 {
   "name": "gsd-force-reactive",
-  "version": "1.0.0",
-  "description": "",
-  "main": "src/index.js",
+  "version": "1.1.0",
+  "description": "Force GSD to optimize task plans for reactive execution concurrency",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
