@@ -2,24 +2,49 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const INTERCEPT_TOOLS = new Set(["gsd_plan_slice", "gsd_slice_plan"]);
 const GSD_HOME = process.env.GSD_HOME ?? join(homedir(), ".gsd");
 const MAX_PARALLEL_DEFAULT = 8;
-const seenSlices = new Set();
+
+/**
+ * Planning-phase prompt signatures — substrings that uniquely identify
+ * a prompt as belonging to a slice/milestone planning or replanning unit.
+ * These appear in the `prompt` field of `before_agent_start` (the user
+ * message that kicks off the agent turn).
+ */
+/**
+ * Slice-level planning prompts — these are the phases that produce
+ * TXX-PLAN.md files with Inputs/Expected Output that the reactive
+ * engine parses. Milestone-level planning (roadmap) does NOT produce
+ * task plans, so it is excluded.
+ */
+const PLAN_PHASE_SIGNATURES = [
+	"## UNIT: Plan Slice",
+	"## UNIT: Replan Slice",
+	"## UNIT: Refine Slice",
+];
+
+function isPlanPhasePrompt(prompt) {
+	if (typeof prompt !== "string") return false;
+	return PLAN_PHASE_SIGNATURES.some((sig) => prompt.includes(sig));
+}
 
 function getMaxParallel() {
 	try {
 		const prefsPath = join(GSD_HOME, "PREFERENCES.md");
 		if (existsSync(prefsPath)) {
 			const content = readFileSync(prefsPath, "utf-8");
-			const match = content.match(/reactive_execution:[\s\S]*?max_parallel:\s*(\d+)/i);
+			const match = content.match(
+				/reactive_execution:[\s\S]*?max_parallel:\s*(\d+)/i,
+			);
 			return match?.[1] ? parseInt(match[1], 10) : MAX_PARALLEL_DEFAULT;
 		}
-	} catch { /* ignore */ }
+	} catch {
+		/* ignore */
+	}
 	return MAX_PARALLEL_DEFAULT;
 }
 
-function buildPrompt(maxParallel) {
+function buildSteerMessage(maxParallel) {
 	return (
 		`**Wait! Before we conclude the slice planning phase and move on to execution, we MUST ensure the tasks are fully prepared for high-concurrency reactive (parallel) execution.**\n\n` +
 		`GSD's reactive execution engine builds a dependency graph by statically parsing the \`Inputs\` and \`Expected Output\` sections of every \`TXX-PLAN.md\` file. If **even one** pending task lacks valid I/O annotations, the entire slice will fall back to slow, sequential execution.\n\n` +
@@ -34,30 +59,46 @@ function buildPrompt(maxParallel) {
 }
 
 /**
- * Force Reactive Extension (v1.1.0)
- * 
- * Logic:
- * 1. Intercept gsd_plan_slice (and alias).
- * 2. If successful, inject a steer message to enforce parallel optimization.
- * 3. Track seen slices to avoid double-prompting in the same session.
+ * Force Reactive Extension (v2.0.0)
+ *
+ * Strategy: listen to `agent_end`, look back at the prompt that started
+ * this agent turn (captured from `before_agent_start`). If the prompt
+ * indicates a planning phase (plan-slice, plan-milestone, replan-slice,
+ * refine-slice), inject a steer message demanding the LLM optimize the
+ * plan for reactive execution concurrency.
+ *
+ * Why agent_end instead of tool_result:
+ * - The old approach tried intercepting gsd_plan_slice tool results, but
+ *   pi's extension runner doesn't reliably surface those for GSD tools.
+ * - agent_end fires reliably after every agent turn, giving us a clean
+ *   hook point to inspect what just happened and steer the next turn.
  */
-export default function(pi) {
-	pi.on("tool_result", (event) => {
-		if (event.isError || !INTERCEPT_TOOLS.has(event.toolName)) return;
+export default function (pi) {
+	/** The prompt from the most recent before_agent_start event. */
+	let lastPrompt = "";
 
-		let sliceId = "unknown";
-		try {
-			const input = typeof event.input === "string" ? JSON.parse(event.input) : event.input;
-			if (input?.sliceId) sliceId = input.sliceId;
-		} catch { /* ignore */ }
+	/** Guard: only steer once per planning phase to avoid loops. */
+	let alreadySteered = false;
 
-		if (sliceId !== "unknown") {
-			if (seenSlices.has(sliceId)) return;
-			seenSlices.add(sliceId);
-		}
-
-		pi.sendUserMessage(buildPrompt(getMaxParallel()), { deliverAs: "steer" });
+	pi.on("before_agent_start", (event) => {
+		lastPrompt = typeof event.prompt === "string" ? event.prompt : "";
+		alreadySteered = false;
 	});
 
-	pi.on("session_switch", () => seenSlices.clear());
+	pi.on("agent_end", () => {
+		// Skip if we already steered this planning turn, or the prompt
+		// wasn't a planning phase.
+		if (alreadySteered) return;
+		if (!isPlanPhasePrompt(lastPrompt)) return;
+
+		alreadySteered = true;
+		pi.sendUserMessage(buildSteerMessage(getMaxParallel()), {
+			deliverAs: "steer",
+		});
+	});
+
+	pi.on("session_switch", () => {
+		lastPrompt = "";
+		alreadySteered = false;
+	});
 }
