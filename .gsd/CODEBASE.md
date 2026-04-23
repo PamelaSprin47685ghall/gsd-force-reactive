@@ -1,15 +1,10 @@
 # Codebase Map
 
-Generated: 2026-04-23T08:45:16Z | Files: 7 | Described: 0/7
-<!-- gsd:codebase-meta {"generatedAt":"2026-04-23T08:45:16Z","fingerprint":"d7e62590b3426dc4c8002ff14f43978657d2acea","fileCount":7,"truncated":false} -->
+Generated: 2026-04-23T19:31:50Z | Files: 4 | Described: 0/4
+<!-- gsd:codebase-meta {"generatedAt":"2026-04-23T19:31:50Z","fingerprint":"7da98739829adae0608fd254a371b060e05dc380","fileCount":4,"truncated":false} -->
 
 ### (root)/
 - `.gitignore`
+- `index.js`
 - `package.json`
 - `README.md`
-
-### src/
-- `src/constants.js`
-- `src/controller.js`
-- `src/index.js`
-- `src/utils.js`

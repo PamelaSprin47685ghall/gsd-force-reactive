@@ -1,13 +1,12 @@
 {
   "name": "gsd-force-reactive",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Force GSD to optimize task plans for reactive execution concurrency",
+  "type": "module",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./index.js"]
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module"
+  "license": "MIT"
 }

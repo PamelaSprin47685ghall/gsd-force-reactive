@@ -2,17 +2,18 @@
 
 A GSD extension that enforces fine-grained reactive (parallel) execution.
 
-This plugin intercepts the `gsd_plan_slice` tool result. When a slice is planned, it pauses the workflow and injects a prompt instructing the LLM to:
-1. Break down tasks into fine-grained units to maximize parallel workers (dynamically reads `max_parallel` from `~/.gsd/PREFERENCES.md`).
-2. Properly annotate `### Inputs` and `### Expected Output` in every `TXX-PLAN.md` file using backticks.
-3. Establish clear, correct dependency chains to ensure GSD's reactive engine can construct an unambiguous DAG.
+When a slice-level planning unit completes (Plan Slice, Replan Slice, Refine Slice), this extension injects a steer message that forces the LLM to verify and fix task I/O annotations before execution begins.
 
-## Usage
+**What it checks:**
+1. DAG width meets `max_parallel` (read from `~/.gsd/PREFERENCES.md`, default 8).
+2. File paths in `### Inputs` / `### Expected Output` use backtick syntax.
+3. No task has empty I/O — placeholder files added where needed.
+4. Dependency chains are correct (Task B inputs overlap Task A outputs).
 
-Run `pi` with the extension flag:
+## Install
 
 ```bash
-pi -e ./index.js
+gsd install ./path/to/gsd-force-reactive
 ```
 
-Or copy the directory to your project's `.gsd/extensions/` directory for automatic loading.
+Or copy into `.gsd/extensions/gsd-force-reactive/` for auto-discovery.
